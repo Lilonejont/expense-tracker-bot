@@ -333,6 +333,7 @@ const app = {
                 const row = document.createElement('div');
                 row.className = 'settings-row ripple-wrap';
                 row.style.borderBottom = '1px solid var(--border-default)';
+                row.onclick = () => app.showAddLimitDialog(lim);
                 row.innerHTML = `
                     <div class="flex items-center gap-3">
                         <span class="text-[18px]">${lim.emoji || '📁'}</span>
@@ -355,66 +356,88 @@ const app = {
         }
     },
 
-    async showAddLimitDialog() {
+    async showAddLimitDialog(existingLimit = null) {
         this.haptic('impact', 'medium');
-        // Load categories
-        const catRes = await this.request('category-list', {}, 'GET');
-        if (!catRes || !catRes.categories) {
-            this.showAlert('Не удалось загрузить категории');
+        
+        // Load categories if not loaded
+        if (!this.state.categories) {
+            const catRes = await this.request('category-list', {}, 'GET');
+            if (catRes && catRes.categories) {
+                this.state.categories = catRes.categories;
+            }
+        }
+        
+        const overlay = document.getElementById('limit-sheet-overlay');
+        const sheet = document.getElementById('limit-sheet');
+        const title = document.getElementById('limit-sheet-title');
+        const amtInput = document.getElementById('limit-sheet-amount');
+        const catSelect = document.getElementById('limit-sheet-category');
+        const delBtn = document.getElementById('limit-sheet-delete');
+        const currSpan = document.getElementById('limit-sheet-currency');
+        
+        if (currSpan) currSpan.textContent = this.state.currency || '₽';
+        
+        // Populate categories
+        if (catSelect) {
+            catSelect.innerHTML = '';
+            if (this.state.categories) {
+                this.state.categories.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = `${c.emoji} ${c.name}`;
+                    catSelect.appendChild(opt);
+                });
+            }
+        }
+        
+        if (existingLimit) {
+            if (title) title.textContent = 'Изменить лимит';
+            if (amtInput) amtInput.value = existingLimit.limit_amount;
+            if (catSelect) catSelect.value = existingLimit.category_id;
+            if (delBtn) delBtn.classList.remove('hidden');
+        } else {
+            if (title) title.textContent = 'Новый лимит';
+            if (amtInput) amtInput.value = '';
+            if (catSelect && this.state.categories && this.state.categories.length > 0) {
+                catSelect.value = this.state.categories[0].id;
+            }
+            if (delBtn) delBtn.classList.add('hidden');
+        }
+        
+        if (overlay) overlay.classList.add('active');
+        if (sheet) sheet.classList.add('active');
+        
+        setTimeout(() => { if (amtInput) amtInput.focus(); }, 100);
+    },
+    
+    closeLimitSheet() {
+        document.getElementById('limit-sheet-overlay').classList.remove('active');
+        document.getElementById('limit-sheet').classList.remove('active');
+    },
+    
+    async saveLimitFromSheet() {
+        const catSelect = document.getElementById('limit-sheet-category');
+        const amtInput = document.getElementById('limit-sheet-amount');
+        
+        const catId = parseInt(catSelect.value);
+        const amt = parseFloat(amtInput.value.replace(',', '.'));
+        
+        if (!catId || isNaN(amt) || amt <= 0) {
+            this.showAlert('Введите корректную сумму лимита');
             return;
         }
-
-        // Build options list
-        const cats = catRes.categories;
         
-        // Create an overlay
-        const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;transition:opacity 0.2s;';
+        this.closeLimitSheet();
+        await this.saveLimit(catId, amt);
+    },
+    
+    async deleteLimitFromSheet() {
+        const catSelect = document.getElementById('limit-sheet-category');
+        const catId = parseInt(catSelect.value);
+        const catName = catSelect.options[catSelect.selectedIndex].text;
         
-        const catOptions = cats.map(c => `<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('');
-        
-        overlay.innerHTML = `
-            <div style="background:var(--surface-glass);width:100%;max-width:320px;border-radius:20px;padding:20px;box-shadow:0 15px 40px rgba(0,0,0,0.3);color:var(--text-primary);animation: zoomIn 0.2s cubic-bezier(0.32,0.72,0,1);">
-                <style>@keyframes zoomIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }</style>
-                <h3 style="margin-top:0;margin-bottom:15px;font-size:18px;font-weight:bold;text-align:center;">Установить лимит</h3>
-                <div style="margin-bottom:15px;">
-                    <label style="display:block;margin-bottom:8px;font-size:13px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:1px;">Категория</label>
-                    <select id="limit-cat-select" style="width:100%;padding:12px;border-radius:12px;background:var(--liquid-background-color);color:var(--text-primary);border:1px solid var(--border-default);font-size:16px;outline:none;appearance:none;">
-                        ${catOptions}
-                    </select>
-                </div>
-                <div style="margin-bottom:24px;">
-                    <label style="display:block;margin-bottom:8px;font-size:13px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:1px;">Сумма в месяц</label>
-                    <input type="number" id="limit-amount-input" placeholder="0" style="width:100%;padding:12px;border-radius:12px;background:var(--liquid-background-color);color:var(--text-primary);border:1px solid var(--border-default);font-size:20px;font-weight:bold;box-sizing:border-box;outline:none;">
-                </div>
-                <div style="display:flex;gap:12px;">
-                    <button id="limit-cancel-btn" style="flex:1;padding:14px;border-radius:12px;background:var(--border-level-1);color:var(--text-primary);border:none;font-size:16px;font-weight:bold;cursor:pointer;">Отмена</button>
-                    <button id="limit-save-btn" style="flex:1;padding:14px;border-radius:12px;background:var(--accent-color);color:#fff;border:none;font-size:16px;font-weight:bold;cursor:pointer;">Сохранить</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(overlay);
-        
-        const saveBtn = overlay.querySelector('#limit-save-btn');
-        const cancelBtn = overlay.querySelector('#limit-cancel-btn');
-        const amtInput = overlay.querySelector('#limit-amount-input');
-        const catSelect = overlay.querySelector('#limit-cat-select');
-        
-        setTimeout(() => amtInput.focus(), 100);
-        
-        const close = () => { document.body.removeChild(overlay); };
-        
-        cancelBtn.onclick = close;
-        saveBtn.onclick = () => {
-            const amt = parseFloat(amtInput.value.replace(',', '.'));
-            const catId = parseInt(catSelect.value);
-            if (isNaN(amt) || amt <= 0) {
-                this.showAlert('Введите корректную сумму лимита');
-                return;
-            }
-            this.saveLimit(catId, amt);
-            close();
-        };
+        this.closeLimitSheet();
+        await this.deleteLimit(catId, catName);
     },
 
     async saveLimit(categoryId, amount) {
@@ -438,16 +461,9 @@ const app = {
             }
         };
 
-        if (this.tg && this.tg.showPopup) {
-            this.tg.showPopup({
-                title: 'Удалить лимит?',
-                message: `Вы уверены, что хотите удалить лимит для категории "${catName}"?`,
-                buttons: [
-                    { id: 'delete', type: 'destructive', text: 'Удалить' },
-                    { id: 'cancel', type: 'default', text: 'Отмена' }
-                ]
-            }, (btnId) => {
-                if (btnId === 'delete') doDelete();
+        if (this.tg && this.tg.showConfirm) {
+            this.tg.showConfirm(`Удалить лимит для категории "${catName}"?`, (confirmed) => {
+                if (confirmed) doDelete();
             });
         } else {
             if (confirm(`Удалить лимит для "${catName}"?`)) doDelete();

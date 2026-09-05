@@ -1306,6 +1306,37 @@
         </div>
     </div>
 
-        <script src="app.js?v=8"></script>
+    <!-- LIMIT SHEET -->
+    <div class="bottom-sheet-overlay" id="limit-sheet-overlay" onclick="app.closeLimitSheet()"></div>
+    <div class="bottom-sheet" id="limit-sheet" style="padding-bottom: env(safe-area-inset-bottom);">
+        <div class="sheet-handle"></div>
+        <div class="px-5 pt-2 pb-6">
+            <h2 class="text-[22px] font-bold mb-4" id="limit-sheet-title">Новый лимит</h2>
+            
+            <div class="mb-4">
+                <div class="text-[12px] font-semibold mb-2 uppercase tracking-wider" style="color: var(--text-secondary)">Сумма в месяц</div>
+                <div class="flex items-center gap-2 rounded-xl py-3 px-4" style="background: var(--background-level-1);">
+                    <input type="number" id="limit-sheet-amount" placeholder="0" class="w-full bg-transparent outline-none text-[24px] font-bold" style="color: var(--text-default);">
+                    <span class="text-[20px] font-medium" style="color: var(--text-secondary)" id="limit-sheet-currency">₽</span>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <div class="text-[12px] font-semibold mb-2 uppercase tracking-wider" style="color: var(--text-secondary)">Категория</div>
+                <select id="limit-sheet-category" class="w-full rounded-xl py-3 px-4 outline-none text-[16px] font-medium" style="background: var(--background-level-1); color: var(--text-default); border: 1px solid var(--border-default);">
+                    <!-- options filled by js -->
+                </select>
+            </div>
+
+            <div class="flex gap-3 mt-4">
+                <button onclick="app.closeLimitSheet()" class="flex-1 py-3.5 rounded-xl font-bold text-[16px]" style="background: var(--border-level-1); color: var(--text-default);">Отмена</button>
+                <button onclick="app.saveLimitFromSheet()" class="flex-1 py-3.5 rounded-xl font-bold text-[16px] text-white" style="background: var(--primary-color);">Сохранить</button>
+            </div>
+            
+            <button id="limit-sheet-delete" onclick="app.deleteLimitFromSheet()" class="w-full py-3.5 rounded-xl font-bold text-[16px] mt-3 hidden" style="background: rgba(255, 59, 48, 0.1); color: #FF3B30;">Удалить лимит</button>
+        </div>
+    </div>
+
+        <script src="app.js?v=9"></script>
 </body>
 </html>
