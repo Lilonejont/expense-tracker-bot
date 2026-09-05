@@ -170,6 +170,9 @@ function getExpenseKeyboard($expenseId) {
                 ['text' => 'Изменить категорию', 'callback_data' => "edit:{$expenseId}", 'icon_custom_emoji_id' => PE_SEARCH]
             ],
             [
+                ['text' => 'Изменить сумму', 'callback_data' => "editamt:{$expenseId}", 'icon_custom_emoji_id' => PE_FIRE]
+            ],
+            [
                 ['text' => 'Удалить запись', 'callback_data' => "del:{$expenseId}", 'icon_custom_emoji_id' => PE_WARNING]
             ]
         ]
@@ -307,6 +310,24 @@ if (isset($update['callback_query'])) {
                 'reply_markup' => json_encode(getExpenseKeyboard($restored['id']))
             ]);
         }
+        exit;
+    }
+
+    // Edit amount callback
+    if (preg_match('/^editamt:(\d+)$/', $data, $m)) {
+        $expenseId = (int)$m[1];
+        // Save pending edit
+        $stmt = getDb()->prepare("UPDATE users_settings SET pending_edit_id = ? WHERE user_id = ?");
+        $stmt->execute([$expenseId, $userId]);
+        
+        tgRequest('sendMessage', [
+            'chat_id' => $chatId,
+            'text' => pe(PE_FIRE, '✏️') . " <b>Введите новую сумму</b> для этой записи:\n\nНапример: <code>500</code> или <code>1200.50</code>",
+            'parse_mode' => 'HTML',
+            'reply_markup' => json_encode(['force_reply' => true, 'selective' => true])
+        ]);
+        
+        tgRequest('answerCallbackQuery', ['callback_query_id' => $callbackQueryId]);
         exit;
     }
 
@@ -523,15 +544,26 @@ if (isset($update['message'])) {
             $db = getDb();
             $settings = getUserSettings($userId);
             $groupId = $settings['group_id'];
-            $stmt = $db->prepare("INSERT OR REPLACE INTO category_limits (id, user_id, category_id, limit_amount) 
-                VALUES ((SELECT id FROM category_limits WHERE user_id = ? AND category_id = ?), ?, ?, ?)");
-            $stmt->execute([$groupId, $catId, $groupId, $catId, $limitAmount]);
-            
-            tgRequest('sendMessage', [
-                'chat_id' => $chatId,
-                'text' => pe(PE_FIRE, '🎯') . " <b>Лимит установлен!</b>\n\nКатегория: <b>$foundCatName</b>\nЛимит в месяц: <b>" . number_format($limitAmount, 0, '.', ' ') . " ₽</b>",
-                'parse_mode' => 'HTML'
-            ]);
+            if ($limitAmount <= 0) {
+                $stmt = $db->prepare("DELETE FROM category_limits WHERE user_id = ? AND category_id = ?");
+                $stmt->execute([$groupId, $catId]);
+                
+                tgRequest('sendMessage', [
+                    'chat_id' => $chatId,
+                    'text' => pe(PE_FIRE, '🎯') . " <b>Лимит снят!</b>\n\nКатегория: <b>$foundCatName</b>",
+                    'parse_mode' => 'HTML'
+                ]);
+            } else {
+                $stmt = $db->prepare("INSERT OR REPLACE INTO category_limits (id, user_id, category_id, limit_amount) 
+                    VALUES ((SELECT id FROM category_limits WHERE user_id = ? AND category_id = ?), ?, ?, ?)");
+                $stmt->execute([$groupId, $catId, $groupId, $catId, $limitAmount]);
+                
+                tgRequest('sendMessage', [
+                    'chat_id' => $chatId,
+                    'text' => pe(PE_FIRE, '🎯') . " <b>Лимит установлен!</b>\n\nКатегория: <b>$foundCatName</b>\nЛимит в месяц: <b>" . number_format($limitAmount, 0, '.', ' ') . " ₽</b>",
+                    'parse_mode' => 'HTML'
+                ]);
+            }
         } else {
             tgRequest('sendMessage', [
                 'chat_id' => $chatId,
@@ -754,6 +786,38 @@ if (isset($update['message'])) {
                 ]);
                 exit;
             }
+        }
+    }
+    // Check for pending amount edit
+    $stmtPending = getDb()->prepare("SELECT pending_edit_id FROM users_settings WHERE user_id = ?");
+    $stmtPending->execute([$userId]);
+    $pendingRow = $stmtPending->fetch();
+    if ($pendingRow && !empty($pendingRow['pending_edit_id'])) {
+        $pendingId = (int)$pendingRow['pending_edit_id'];
+        // Clear pending
+        $stmtClear = getDb()->prepare("UPDATE users_settings SET pending_edit_id = NULL WHERE user_id = ?");
+        $stmtClear->execute([$userId]);
+        
+        // Try to parse amount
+        $newAmount = (float)str_replace(',', '.', trim($text));
+        if ($newAmount > 0) {
+            $stmtUpdate = getDb()->prepare("UPDATE expenses SET amount = ? WHERE id = ? AND user_id = ?");
+            $stmtUpdate->execute([$newAmount, $pendingId, $userId]);
+            
+            // Fetch updated expense
+            $stmtExp = getDb()->prepare("SELECT e.*, c.name as category_name, c.emoji as category_emoji FROM expenses e JOIN categories c ON e.category_id = c.id WHERE e.id = ?");
+            $stmtExp->execute([$pendingId]);
+            $updatedExp = $stmtExp->fetch(PDO::FETCH_ASSOC);
+            
+            if ($updatedExp) {
+                tgRequest('sendMessage', [
+                    'chat_id' => $chatId,
+                    'text' => pe(PE_PARTY, '✅') . " <b>Сумма изменена!</b>\n\n" . getExpenseSuccessMessage($updatedExp),
+                    'parse_mode' => 'HTML',
+                    'reply_markup' => json_encode(getExpenseKeyboard($pendingId))
+                ]);
+            }
+            exit;
         }
     }
 

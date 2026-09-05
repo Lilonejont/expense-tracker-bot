@@ -112,6 +112,28 @@ $dateCondition = getPeriodCondition($period);
 $jsonInput = json_decode(file_get_contents("php://input"), true) ?: [];
 
 switch ($action) {
+    case 'get-limits':
+        $stmt = $db->prepare("SELECT cl.category_id, cl.limit_amount, c.name, c.emoji FROM category_limits cl JOIN categories c ON cl.category_id = c.id WHERE cl.user_id = ?");
+        $stmt->execute([$groupId]);
+        $limits = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        sendJson(['ok' => true, 'limits' => $limits]);
+        break;
+        
+    case 'set-limit':
+        $catId = (int)($jsonInput['category_id'] ?? 0);
+        $amount = (float)($jsonInput['amount'] ?? 0);
+        if ($catId <= 0) sendJson(['ok' => false, 'error' => 'Invalid category']);
+        
+        if ($amount <= 0) {
+            $stmt = $db->prepare("DELETE FROM category_limits WHERE user_id = ? AND category_id = ?");
+            $stmt->execute([$groupId, $catId]);
+        } else {
+            $stmt = $db->prepare("INSERT OR REPLACE INTO category_limits (id, user_id, category_id, limit_amount) VALUES ((SELECT id FROM category_limits WHERE user_id = ? AND category_id = ?), ?, ?, ?)");
+            $stmt->execute([$groupId, $catId, $groupId, $catId, $amount]);
+        }
+        sendJson(['ok' => true]);
+        break;
+
     /* ── 1. SUMMARY ─────────────────────────────────────────────────── */
     case 'summary':
         $stmtStats = $db->prepare("SELECT SUM(amount) as total, COUNT(id) as count 

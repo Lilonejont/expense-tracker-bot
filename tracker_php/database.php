@@ -65,6 +65,8 @@ function initTables($db) {
     ");
 
     seedCategories($db);
+
+    try { $db->exec("ALTER TABLE users_settings ADD COLUMN pending_edit_id INTEGER DEFAULT NULL"); } catch (Exception $e) {}
 }
 
 function getUserSettings($userId) {
