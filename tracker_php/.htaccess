@@ -1,0 +1,4 @@
+<FilesMatch "\.(sqlite|db|log)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>

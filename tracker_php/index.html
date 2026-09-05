@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Tracker</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <script>
+        /* Early theme to prevent flash */
+        (function(){
+            let t = null;
+            try { t = localStorage.getItem('theme'); } catch(e){}
+            const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (t === 'dark' || (t === 'system' && dark)) {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: 'var(--primary-color)',
+                        accent: 'var(--accent-color)'
+                    },
+                    fontFamily: {
+                        sans: ['SF Pro Display', 'SF Pro Text', '-apple-system', 'BlinkMacSystemFont', 'Helvetica Neue', 'Arial', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        :root {
+            --background: #f5f5f7;
+            --background-level-1: #eeeeee;
+            --background-level-2: #f5f5f7;
+            --background-level-3: #ffffff;
+            --surface: rgba(255, 255, 255, .7);
+            --surface-glass: rgba(255, 255, 255, .65);
+            --primary-color: #0b84fe;
+            --accent-color: rgb(10, 132, 255);
+            --card-bg-level-0: rgba(255, 255, 255, .4);
+            --card-bg-level-1: rgba(255, 255, 255, .5);
+            --card-bg-level-2: rgba(255, 255, 255, .6);
+            --card-bg-level-3: rgba(255, 255, 255, .75);
+            --border-default: rgba(0, 0, 0, .1);
+            --border-subtle: rgba(0, 0, 0, .06);
+            --border-level-1: #e8e8e8;
+            --border-level-2: #e5e5e5;
+            --text-default: #000000;
+            --text-secondary: rgba(0, 0, 0, .55);
+            --primary-text-color: black;
+            --shadow-soft: 0 8px 32px rgba(0, 0, 0, .04);
+            --shadow-medium: 0 12px 48px rgba(0, 0, 0, .08);
+            --shadow-card: 0 4px 16px rgba(0, 0, 0, .06);
+            --liquid-background-color: rgba(0, 0, 0, .04);
+            --keyboard-container-bg: #e8e8ed;
+            --keyboard-key-bg: #ffffff;
+            --keyboard-key-text-primary: #000000;
+            --keyboard-key-backspace-bg: #d1d1d6;
+            --danger-color: #ff3b30;
+            --success-color: #34c759;
+
+            /* Telegram safe area fallbacks — TG SDK sets these at runtime */
+            --tg-safe-area-inset-top: 0px;
+            --tg-safe-area-inset-bottom: 0px;
+            --tg-safe-area-inset-left: 0px;
+            --tg-safe-area-inset-right: 0px;
+            --tg-content-safe-area-inset-top: 0px;
+            --tg-content-safe-area-inset-bottom: 0px;
+            --tg-content-safe-area-inset-left: 0px;
+            --tg-content-safe-area-inset-right: 0px;
+
+            /* Computed safe areas */
+            --safe-top: max(var(--tg-content-safe-area-inset-top, 0px), env(safe-area-inset-top, 0px));
+            --safe-bottom: max(var(--tg-safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px));
+            --safe-left: max(var(--tg-safe-area-inset-left, 0px), env(safe-area-inset-left, 0px));
+            --safe-right: max(var(--tg-safe-area-inset-right, 0px), env(safe-area-inset-right, 0px));
+        }
+
+        .dark {
+            --background: #000000;
+            --background-level-1: #1c1c1e;
+            --background-level-2: #222223;
+            --background-level-3: #333334;
+            --surface: rgba(22, 27, 34, .75);
+            --surface-glass: rgba(22, 27, 34, .65);
+            --text-default: #ffffff;
+            --text-secondary: rgba(255, 255, 255, .55);
+            --primary-text-color: white;
+            --card-bg-level-1: rgba(28, 28, 30, .65);
+            --card-bg-level-2: rgba(33, 38, 45, .7);
+            --card-bg-level-3: rgba(48, 54, 61, .75);
+            --border-default: rgba(48, 54, 61, 1);
+            --border-subtle: rgba(33, 38, 45, 1);
+            --border-level-1: #333333;
+            --shadow-soft: 0 8px 32px rgba(0, 0, 0, .6);
+            --shadow-medium: 0 12px 48px rgba(0, 0, 0, .8);
+            --shadow-card: 0 4px 16px rgba(0, 0, 0, .4);
+            --liquid-background-color: rgba(255, 255, 255, .08);
+            --keyboard-container-bg: #1c1c1e;
+            --keyboard-key-bg: #3a3a3c;
+            --keyboard-key-text-primary: #ffffff;
+            --keyboard-key-backspace-bg: #2c2c2e;
+        }
+
+        .dark .keyboard-key:active { filter: brightness(1.3); }
+
+        html {
+            height: 100%;
+            height: 100dvh;
+            overflow: hidden;
+        }
+
+        body {
+            background-color: var(--background);
+            color: var(--text-default);
+            font-family: SF Pro Display, SF Pro Text, -apple-system, BlinkMacSystemFont, Helvetica Neue, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            height: 100%;
+            height: 100dvh;
+            position: relative;
+        }
+
+        #app-container {
+            height: 100%;
+            height: 100dvh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        * { user-select: none; -webkit-user-select: none; box-sizing: border-box; }
+        input, textarea { user-select: text; -webkit-user-select: text; }
+
+        .tnum { 
+            font-feature-settings: "tnum" 1; 
+            font-variant-numeric: tabular-nums; 
+            font-family: 'SF Pro Rounded', ui-rounded, 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif; 
+        }
+
+        /* ===== LIQUID GLASS NAVIGATION ===== */
+        .navigation-container {
+            position: fixed;
+            bottom: calc(12px + var(--safe-bottom));
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            z-index: 40;
+            pointer-events: none;
+            padding: 0 1.5rem;
+        }
+
+        .liquid-glass-nav-wrap {
+            perspective: 500px;
+            pointer-events: auto;
+            position: relative;
+        }
+
+        .liquid-glass-nav-shadow {
+            position: absolute;
+            inset: -4px;
+            border-radius: 999vw;
+            filter: blur(12px);
+            background: linear-gradient(rgba(0,0,0,.03), rgba(0,0,0,.08));
+            z-index: -1;
+        }
+        .dark .liquid-glass-nav-shadow {
+            background: linear-gradient(rgba(0,0,0,.3), rgba(0,0,0,.6));
+        }
+
+        .liquid-glass-nav {
+            backdrop-filter: blur(32px) saturate(180%);
+            -webkit-backdrop-filter: blur(32px) saturate(180%);
+            background: linear-gradient(-75deg,
+                rgba(255,255,255,.05),
+                rgba(255,255,255,.2),
+                rgba(255,255,255,.05));
+            padding: 6px;
+            display: flex;
+            gap: 0;
+            border-radius: 999vw;
+            position: relative;
+            box-shadow:
+                inset 0 2px 2px rgba(0,0,0,.04),
+                inset 0 -2px 2px rgba(255,255,255,.3),
+                0 4px 2px -2px rgba(0,0,0,.03),
+                inset 0 0 1.5px 4px rgba(255,255,255,.15);
+        }
+        .dark .liquid-glass-nav {
+            background: linear-gradient(-75deg,
+                rgba(0,0,0,.05),
+                rgba(0,0,0,.18),
+                rgba(0,0,0,.05));
+            box-shadow:
+                inset 0 2px 2px rgba(0,0,0,.1),
+                inset 0 -2px 2px rgba(255,255,255,.06),
+                0 4px 2px -2px rgba(0,0,0,.2),
+                inset 0 0 1.5px 4px rgba(0,0,0,.15);
+        }
+
+        .liquid-glass-nav::after {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: inherit;
+            padding: 1px;
+            background: conic-gradient(from -75deg at 50% 50%,
+                rgba(150,150,255,.35),
+                transparent 5% 40%,
+                rgba(150,150,255,.35) 50%,
+                transparent 60% 95%,
+                rgba(150,150,255,.35)),
+                linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,.3));
+            box-shadow: inset 0 0 0 .5px rgba(255,255,255,.3);
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+
+        .liquid-glass-nav-slider {
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            width: 80px;
+            height: calc(100% - 12px);
+            background: linear-gradient(-75deg, rgba(100,100,100,.1), rgba(100,100,100,.15), rgba(100,100,100,.1));
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 999vw;
+            transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .liquid-glass-nav-item {
+            position: relative;
+            width: 80px;
+            height: 46px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            cursor: pointer;
+            z-index: 10;
+            transition: all 0.3s cubic-bezier(.25,1,.5,1);
+            color: var(--text-default);
+            overflow: visible;
+            border-radius: 999vw;
+        }
+
+        .liquid-glass-nav-item:active { transform: scale(.96); }
+
+        .liquid-glass-nav-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            width: 100%;
+            height: 100%;
+            transition: all .3s cubic-bezier(.25,1,.5,1);
+        }
+
+        .nav-icon {
+            width: 24px;
+            height: 24px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,.05));
+            transition: all .3s cubic-bezier(.25,1,.5,1);
+            flex-shrink: 0;
+        }
+
+        .nav-label {
+            font-size: 11px;
+            font-weight: 500;
+            opacity: .7;
+            white-space: nowrap;
+            transition: all .3s cubic-bezier(.25,1,.5,1);
+            text-shadow: 0 1px 2px rgba(0,0,0,.1);
+        }
+
+        .liquid-glass-nav-item.active { color: var(--accent-color); }
+        .liquid-glass-nav-item.active .nav-icon {
+            filter: drop-shadow(0 2px 4px rgba(10,132,255,.3));
+        }
+        .liquid-glass-nav-item.active .nav-label { opacity: 1; }
+        .liquid-glass-nav-item:hover .nav-icon { transform: scale(1.1); }
+        .liquid-glass-nav-item:hover .nav-label { opacity: 1; }
+
+        .dark .nav-label { color: rgba(255,255,255,.85); }
+        .dark .liquid-glass-nav-item.active .nav-label { color: var(--accent-color); }
+
+        /* ===== GLASSMORPHIC PLUS BUTTON ===== */
+        .glassmorphic-plus-wrap {
+            position: fixed;
+            bottom: calc(80px + var(--safe-bottom));
+            right: 1.5rem;
+            z-index: 35;
+            perspective: 1000px;
+        }
+
+        .btn-primary {
+            width: 100%;
+            height: 48px;
+            border-radius: 14px;
+            background: var(--primary-color);
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all .25s cubic-bezier(.32,.72,0,1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        @media (hover: hover) {
+            .btn-primary:hover {
+                transform: scale(1.02);
+                box-shadow: 0 4px 14px rgba(11, 132, 254, .3);
+            }
+        }
+        .btn-primary:active { transform: scale(.96); }
+
+        .btn-danger {
+            width: 100%;
+            height: 56px;
+            border-radius: 14px;
+            background: rgba(255,59,48,.1);
+            color: #FF3B30;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all .25s cubic-bezier(.32,.72,0,1);
+        }
+        @media (hover: hover) {
+            .btn-danger:hover {
+                background: rgba(255,59,48,.15);
+                transform: scale(1.02);
+            }
+        }
+        .btn-danger:active {
+            transform: scale(.96);
+            background: rgba(255,59,48,.2);
+        }
+
+        .glassmorphic-plus-button {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            background: linear-gradient(-75deg,
+                rgba(255,255,255,.08),
+                rgba(255,255,255,.25),
+                rgba(255,255,255,.08));
+            border: none;
+            box-shadow:
+                inset 0 2px 2px rgba(0,0,0,.04),
+                inset 0 -2px 2px rgba(255,255,255,.3),
+                0 8px 24px rgba(0,0,0,.12),
+                inset 0 0 1.5px 4px rgba(255,255,255,.12);
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(.25,1,.5,1);
+            position: relative;
+        }
+        .dark .glassmorphic-plus-button {
+            background: linear-gradient(-75deg,
+                rgba(0,0,0,.08),
+                rgba(0,0,0,.2),
+                rgba(0,0,0,.08));
+            box-shadow:
+                inset 0 2px 2px rgba(0,0,0,.1),
+                inset 0 -2px 2px rgba(255,255,255,.06),
+                0 8px 24px rgba(0,0,0,.4),
+                inset 0 0 1.5px 4px rgba(0,0,0,.12);
+        }
+
+        .glassmorphic-plus-button::after {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: inherit;
+            padding: 1px;
+            background: conic-gradient(from 180deg at 50% 50%,
+                rgba(150,150,255,.3), transparent 5% 40%,
+                rgba(150,150,255,.3) 50%, transparent 60% 95%,
+                rgba(150,150,255,.3)),
+                linear-gradient(180deg, rgba(255,255,255,.4), rgba(255,255,255,.2));
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+
+        .glassmorphic-plus-button:active { transform: scale(.92) rotateX(15deg); }
+        .glassmorphic-plus-button:hover { transform: scale(1.05); }
+
+        .glassmorphic-plus-button .plus-svg {
+            width: 28px;
+            height: 28px;
+            stroke: var(--accent-color);
+            fill: none;
+            stroke-width: 2.5;
+            stroke-linecap: round;
+            filter: drop-shadow(0 2px 4px rgba(10,132,255,.3));
+            z-index: 10;
+            position: relative;
+        }
+
+        /* ===== CARD STYLES ===== */
+        .card-level-1 {
+            background-color: var(--card-bg-level-1);
+            border: 1px solid var(--border-default);
+            border-radius: 1.5rem;
+            box-shadow: var(--shadow-card);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            transition: background-color .3s ease, border-color .3s ease, box-shadow .3s cubic-bezier(.32,.72,0,1), transform .3s cubic-bezier(.32,.72,0,1);
+        }
+
+        .glass-card {
+            background-color: var(--card-bg-level-2);
+            border: 1px solid var(--border-default);
+            border-radius: 1rem;
+            box-shadow: var(--shadow-card);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            transition: transform .3s cubic-bezier(.32,.72,0,1), box-shadow .3s cubic-bezier(.32,.72,0,1);
+        }
+        @media (hover: hover) {
+            .glass-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 12px 32px rgba(0,0,0,.08);
+            }
+            .card-level-1:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 12px 48px rgba(0,0,0,.06);
+            }
+        }
+
+        /* ===== CATEGORY ICON CONTAINER ===== */
+        .cat-icon-wrap {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: transform .2s ease;
+        }
+        .cat-icon-wrap svg {
+            width: 22px;
+            height: 22px;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
+        }
+
+        /* ===== NUMERIC KEYBOARD ===== */
+        .numeric-keyboard {
+            background-color: var(--keyboard-container-bg);
+            padding: 8px;
+            padding-top: 20px;
+            border-radius: 24px 24px 0 0;
+            border-top: 1px solid var(--border-default);
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .keyboard-key {
+            background-color: var(--keyboard-key-bg);
+            color: var(--keyboard-key-text-primary);
+            height: 52px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            font-weight: 400;
+            line-height: 1;
+            box-shadow: 0 1px 0 rgba(0,0,0,0.25), 0 1px 3px rgba(0,0,0,.08);
+            cursor: pointer;
+            transition: transform .1s ease;
+            border: none;
+        }
+
+        .keyboard-key:active { 
+            transform: scale(.95);
+            filter: brightness(0.9);
+        }
+        .keyboard-key--backspace {
+            background-color: var(--keyboard-key-backspace-bg);
+            box-shadow: none;
+        }
+        .keyboard-key--backspace svg {
+            width: 26px;
+            height: 26px;
+            stroke: var(--keyboard-key-text-primary);
+            fill: none;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .keyboard-key--save {
+            background-color: var(--accent-color) !important;
+            color: white !important;
+            font-size: 17px;
+            font-weight: 600;
+            grid-column: span 3;
+            border-radius: 12px;
+            height: 50px;
+            margin-top: 4px;
+            margin-bottom: var(--safe-bottom);
+            box-shadow: 0 2px 8px rgba(10,132,255,.3);
+        }
+
+        /* ===== SCREENS ===== */
+        .screen {
+            display: none;
+            position: absolute;
+            inset: 0;
+            padding: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+            overscroll-behavior-y: contain;
+            will-change: scroll-position;
+        }
+        .screen.active {
+            display: block;
+            animation: screenIn .38s cubic-bezier(.32,.72,0,1) forwards;
+        }
+        .screen-content {
+            padding: 16px;
+            padding-top: calc(16px + var(--safe-top));
+            padding-bottom: calc(110px + var(--safe-bottom));
+            padding-left: calc(16px + var(--safe-left));
+            padding-right: calc(16px + var(--safe-right));
+        }
+        /* History screen has no top content padding — sticky header handles it */
+        #screen-history .screen-content {
+            padding-top: 0;
+        }
+
+        @keyframes screenIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes itemIn {
+            from { opacity: 0; transform: translateY(16px) scale(.97); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .animate-in {
+            animation: itemIn .4s cubic-bezier(.32,.72,0,1) both;
+        }
+
+
+        /* ===== PERIOD SELECTOR (segmented control) ===== */
+        .period-selector {
+            display: flex;
+            background: var(--background-level-1);
+            border-radius: 10px;
+            padding: 2px;
+            margin-bottom: 1.5rem;
+        }
+
+        .period-btn {
+            flex: 1;
+            text-align: center;
+            padding: 9px 0;
+            font-size: 14px;
+            border-radius: 8px;
+            color: var(--text-default);
+            opacity: .6;
+            transition: all .25s cubic-bezier(.32,.72,0,1);
+            font-weight: 500;
+            cursor: pointer;
+        }
+        @media (hover: hover) {
+            .period-btn:not(.active):hover {
+                background: var(--background-level-2);
+                opacity: .8;
+            }
+        }
+
+        .period-btn.active {
+            background: var(--card-bg-level-3);
+            opacity: 1;
+            font-weight: 600;
+            box-shadow: 0 1px 4px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+            transform: scale(1.02);
+        }
+
+        /* ===== BOTTOM SHEET ===== */
+        .bottom-sheet-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.4);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .35s cubic-bezier(.32,.72,0,1);
+        }
+
+        .bottom-sheet {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--surface-glass);
+            backdrop-filter: blur(40px) saturate(200%);
+            -webkit-backdrop-filter: blur(40px) saturate(200%);
+            border-radius: 32px 32px 0 0;
+            z-index: 51;
+            transform: translateY(100%);
+            transition: transform .4s cubic-bezier(.32,.72,0,1);
+            max-height: 90vh;
+            max-height: 90dvh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 -8px 40px rgba(0,0,0,.15);
+        }
+
+        .bottom-sheet-overlay.active { opacity: 1; pointer-events: auto; }
+        .bottom-sheet.active { transform: translateY(0); }
+
+        .sheet-handle {
+            width: 36px;
+            height: 5px;
+            background: var(--border-level-1);
+            border-radius: 999px;
+            margin: 10px auto;
+            opacity: .6;
+        }
+
+        /* ===== TRANSACTION ITEM ===== */
+        .tx-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            cursor: pointer;
+            transition: background-color .25s cubic-bezier(.32,.72,0,1), transform .25s cubic-bezier(.32,.72,0,1), box-shadow .25s cubic-bezier(.32,.72,0,1), border-radius .25s ease;
+            position: relative;
+            z-index: 1;
+        }
+        @media (hover: hover) {
+            .tx-item:hover {
+                background-color: var(--liquid-background-color);
+                transform: scale(.995) translateY(-1px);
+                box-shadow: 0 4px 16px rgba(0,0,0,.03);
+                border-radius: 14px;
+                z-index: 2;
+            }
+        }
+        .tx-item:active {
+            background-color: var(--liquid-background-color);
+            transform: scale(.97);
+            border-radius: 14px;
+        }
+        .tx-item::after {
+            content: '';
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 7px;
+            height: 12px;
+            opacity: .25;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='12' fill='none'%3E%3Cpath d='M1 1l5 5-5 5' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+        }
+
+        /* ===== CATEGORY CHIP ===== */
+        .cat-chip {
+            flex-shrink: 0;
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px 20px;
+            border-radius: 999px;
+            font-size: 14px;
+            font-weight: 500;
+            border: 1px solid var(--border-default);
+            background: var(--background-level-1);
+            color: var(--text-default);
+            transition: all .3s cubic-bezier(.34, 1.56, 0.64, 1);
+            cursor: pointer;
+            white-space: nowrap;
+            scroll-snap-align: start;
+        }
+        @media (hover: hover) {
+            .cat-chip:hover {
+                transform: scale(1.04) translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0,0,0,.08);
+            }
+        }
+        .cat-chip:active {
+            transform: scale(.94);
+        }
+        .cat-chip.selected {
+            background: var(--accent-color);
+            color: white;
+            border-color: transparent;
+            box-shadow: 0 2px 8px rgba(10,132,255,.3);
+        }
+        .cat-chip svg {
+            width: 16px;
+            height: 16px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        #sheet-categories {
+            scroll-snap-type: x mandatory;
+            scroll-behavior: smooth;
+        }
+
+        /* ===== TOAST ===== */
+        .toast {
+            position: fixed;
+            top: calc(16px + var(--safe-top));
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            padding: 12px 24px;
+            border-radius: 999px;
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 100;
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            background: var(--surface-glass);
+            border: 1px solid var(--border-default);
+            box-shadow: var(--shadow-medium);
+            transition: transform .4s cubic-bezier(.34,1.56,.64,1), opacity .3s ease;
+            opacity: 0;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        /* ===== SCROLLBAR HIDE ===== */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* ===== EMPTY STATE ===== */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem 1rem;
+            opacity: .5;
+            text-align: center;
+        }
+        .empty-state svg {
+            width: 48px;
+            height: 48px;
+            stroke: var(--text-default);
+            fill: none;
+            stroke-width: 1;
+            opacity: .3;
+            margin-bottom: 12px;
+        }
+
+        /* ===== PROFILE AVATAR ===== */
+        .profile-avatar {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-color), #5856D6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 22px;
+            font-weight: 700;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(10,132,255,.3);
+        }
+
+        /* ===== SETTINGS LIST ===== */
+        .settings-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            cursor: pointer;
+            transition: background-color .25s cubic-bezier(.32,.72,0,1);
+        }
+        @media (hover: hover) {
+            .settings-row:hover { background-color: var(--liquid-background-color); }
+        }
+        .settings-row:active { background-color: rgba(120,120,120,.15); }
+
+        /* ===== STAT BAR ===== */
+        .stat-bar {
+            height: 6px;
+            border-radius: 999px;
+            background: var(--border-level-1);
+            overflow: hidden;
+        }
+        .stat-bar-fill {
+            height: 100%;
+            border-radius: 999px;
+            transition: width .6s cubic-bezier(.32,.72,0,1);
+        }
+    
+        /* Limits Progress Bars */
+        #categories-progress-container {
+            margin-top: 1.5rem;
+        }
+        .limit-item {
+            margin-bottom: 12px;
+        }
+        .limit-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            margin-bottom: 6px;
+            color: var(--text-default);
+            font-weight: 500;
+        }
+        .limit-bar-bg {
+            width: 100%;
+            height: 8px;
+            background-color: var(--border-level-1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .limit-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        .limit-warning { background-color: #FFB340 !important; }
+        .limit-danger { background-color: #FF3B30 !important; }
+    
+        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .header-top h2 { margin-bottom: 0; }
+        .icon-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-default); padding: 5px; }
+        .settings-section { margin-bottom: 20px; text-align: left; }
+        .settings-section label { display: block; font-weight: 500; margin-bottom: 8px; color: var(--text-default); }
+        .currency-selector { display: flex; gap: 8px; flex-wrap: wrap; }
+        .curr-btn { flex: 1; min-width: 45%; min-height: 44px; padding: 10px; border-radius: 12px; border: 1px solid var(--border-level-1); background: var(--card-bg-level-1); color: var(--text-default); cursor: pointer; transition: 0.2s; }
+        .curr-btn.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+
+        /* ===== STICKY GLASSMORPHISM HEADERS ===== */
+        .sticky-header {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: var(--surface-glass);
+            backdrop-filter: blur(28px) saturate(200%) brightness(1.02);
+            -webkit-backdrop-filter: blur(28px) saturate(200%) brightness(1.02);
+            /* Expand to bleed edge since .screen has no side padding */
+            padding: calc(var(--safe-top) + 12px) calc(16px + var(--safe-right)) 12px calc(16px + var(--safe-left));
+            box-shadow: 0 1px 0 var(--border-subtle), 0 4px 20px rgba(0,0,0,.04);
+            /* Subtle transition when page is scrolled */
+            transition: box-shadow .25s ease, background .25s ease;
+        }
+        .sticky-header.scrolled {
+            box-shadow: 0 1px 0 var(--border-default), 0 6px 28px rgba(0,0,0,.08);
+        }
+
+        .sticky-date {
+            position: sticky;
+            top: calc(68px + var(--safe-top));   /* just below the sticky search bar */
+            z-index: 15;
+            background: var(--surface-glass);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            padding: 6px calc(16px + var(--safe-right)) 6px calc(16px + var(--safe-left));
+            border-bottom: 1px solid var(--border-subtle);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            box-shadow: 0 2px 12px rgba(0,0,0,.03);
+        }
+
+        /* ===== SCROLL FADE-IN ===== */
+        .fade-up {
+            opacity: 0;
+            transform: translateY(18px);
+            transition: opacity .45s cubic-bezier(.32,.72,0,1), transform .45s cubic-bezier(.32,.72,0,1);
+        }
+        .fade-up.visible { opacity: 1; transform: translateY(0); }
+
+        /* ===== PRESS RIPPLE ===== */
+        .ripple-wrap { position: relative; overflow: hidden; }
+        .ripple-wrap::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle, rgba(120,120,120,.18) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity .4s ease;
+            pointer-events: none;
+        }
+        .ripple-wrap:active::after { opacity: 1; transition: opacity 0s; }
+
+        /* ===== ACCESSIBILITY (iOS Liquid Glass Guidelines) ===== */
+        @media (prefers-reduced-transparency: reduce) {
+            .liquid-glass-nav, .sticky-header, .sticky-date, .glass-card, .glassmorphic-plus-button, .modal, .bottom-sheet {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background-color: var(--background-level-2) !important;
+                border: 1px solid var(--border-default);
+            }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, ::before, ::after {
+                transition-duration: 0s !important;
+                transition-delay: 0s !important;
+                animation-duration: 1ms !important;
+                animation-delay: -1ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
+    </style>
+
+
+</head>
+<body>
+
+    <!-- TOAST -->
+    <div class="toast" id="toast">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <span id="toast-text"></span>
+    </div>
+
+    <!-- SCREENS -->
+    <main id="app-container">
+        <!-- HOME SCREEN -->
+        <div id="screen-home" class="screen active">
+            <div class="screen-content">
+                <div class="sticky-header" style="padding-top: calc(var(--safe-top) + 12px); padding-bottom: 12px; margin-bottom: 16px;">
+                    <div class="flex gap-2" style="background: var(--background-level-1); padding: 4px; border-radius: 10px;">
+                        <div class="period-btn active" data-period="day">Сегодня</div>
+                        <div class="period-btn" data-period="week">Неделя</div>
+                        <div class="period-btn" data-period="month">Месяц</div>
+                        <div class="period-btn" data-period="year">Год</div>
+                    </div>
+                </div>
+
+                <div class="card-level-1 p-6 mb-6 text-center animate-in">
+                    <div class="text-sm" style="color: var(--text-secondary)">Всего расходов</div>
+                    <div class="text-[32px] font-bold mt-1 mb-4 leading-tight tnum" id="home-total">0 ₽</div>
+                    <div class="flex justify-around border-t pt-4" style="border-color: var(--border-default)">
+                        <div class="text-center">
+                            <div class="text-[11px] font-medium" style="color: var(--text-secondary)">Транзакций</div>
+                            <div class="font-bold text-[17px] mt-1 tnum" id="home-count">0</div>
+                        </div>
+                        <div class="w-px" style="background: var(--border-default)"></div>
+                        <div class="text-center">
+                            <div class="text-[11px] font-medium" style="color: var(--text-secondary)">В среднем/день</div>
+                            <div class="font-bold text-[17px] mt-1 tnum" id="home-avg">0 ₽</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-2">
+                    <div class="flex items-center justify-between mb-3 px-1">
+                        <h3 class="text-[17px] font-bold">Последние</h3>
+                    </div>
+                    <div id="home-recent-list" class="card-level-1 overflow-hidden mb-6">
+                        <!-- Transactions injected here -->
+                    </div>
+                </div>
+            </div> <!-- screen-content -->
+        </div> <!-- screen-home -->
+
+        <!-- STATS SCREEN -->
+        <div id="screen-stats" class="screen">
+            <div class="screen-content">
+                <div class="sticky-header" style="padding-top: calc(var(--safe-top) + 12px); padding-bottom: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--border-subtle);">
+                    <div class="flex gap-2 mb-3" id="stats-period-selector" style="background: var(--background-level-1); padding: 4px; border-radius: 10px;">
+                        <div class="period-btn" data-period="week">Неделя</div>
+                        <div class="period-btn active" data-period="month">Месяц</div>
+                        <div class="period-btn" data-period="year">Год</div>
+                    </div>
+                    <div class="flex gap-2" id="stats-type-selector" style="background: var(--background-level-1); padding: 4px; border-radius: 10px;">
+                        <div class="period-btn active" data-type="categories">Категории</div>
+                        <div class="period-btn" data-type="daily">По дням</div>
+                    </div>
+                </div>
+
+                <div class="card-level-1 p-4 mb-6" style="min-height: 220px">
+                    <canvas id="stats-chart" height="220"></canvas>
+                </div>
+
+                <div class="mt-4">
+                    <h3 class="text-[17px] font-bold mb-3 px-1" id="stats-list-title">Расходы по категориям</h3>
+                    <div id="stats-list" class="flex flex-col gap-2">
+                        <!-- Stats injected here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- HISTORY SCREEN -->
+        <div id="screen-history" class="screen">
+            <!-- sticky search bar — sits outside screen-content so it bleeds full-width -->
+            <div class="sticky-header" id="history-search-wrap">
+                <div class="relative">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" style="pointer-events:none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    <input type="search" id="history-search" placeholder="Поиск операций..."
+                        class="w-full rounded-xl py-2.5 pl-10 pr-4 outline-none border transition-colors text-[16px]"
+                        style="background: var(--background-level-1); color: var(--text-default); border-color: transparent;"
+                        onfocus="this.style.borderColor='var(--accent-color)'" onblur="this.style.borderColor='transparent'">
+                </div>
+            </div>
+            <!-- history list uses screen-content padding but no top padding (header above covers it) -->
+            <div class="screen-content">
+                <div id="history-list" class="flex flex-col gap-0">
+                    <!-- Grouped transactions injected here -->
+                </div>
+            </div>
+        </div>
+
+
+        <!-- SETTINGS SCREEN -->
+        <div id="screen-settings" class="screen">
+            <div class="screen-content">
+                <div class="sticky-header flex items-center gap-4" style="padding: calc(var(--safe-top) + 16px) 16px 16px 16px; margin-bottom: 16px; border-bottom: 1px solid var(--border-subtle);">
+                    <img class="profile-avatar object-cover hidden" id="profile-photo" src="" alt="avatar" style="width: 56px; height: 56px; border-radius: 50%;">
+                    <div class="profile-avatar flex items-center justify-center text-[22px] font-bold" id="profile-avatar" style="width: 56px; height: 56px; border-radius: 50%; background: var(--primary-color); color: white;">U</div>
+                    <div>
+                        <div class="font-bold text-[18px]" id="profile-name">Пользователь</div>
+                        <div class="text-[14px]" style="color: var(--text-secondary)" id="profile-username">@username</div>
+                    </div>
+                </div>
+                
+                <!-- CURRENCY SELECTION -->
+                <div class="text-[12px] font-semibold mb-2 px-3 uppercase tracking-widest" style="color: var(--text-secondary)">Основная валюта</div>
+                <div class="card-level-1 overflow-hidden mb-6">
+                    <div class="settings-row ripple-wrap" style="border-bottom: 1px solid var(--border-default)" onclick="app.setCurrency('₽')">
+                        <div class="flex items-center gap-3">
+                            <span class="text-[18px]">🇷🇺</span>
+                            <span class="text-[15px]">Российский рубль (₽)</span>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="curr-check hidden" data-curr-check="₽"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <div class="settings-row ripple-wrap" style="border-bottom: 1px solid var(--border-default)" onclick="app.setCurrency('смн')">
+                        <div class="flex items-center gap-3">
+                            <span class="text-[18px]">🇹🇯</span>
+                            <span class="text-[15px]">Таджикский сомони (смн)</span>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="curr-check hidden" data-curr-check="смн"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <div class="settings-row ripple-wrap" style="border-bottom: 1px solid var(--border-default)" onclick="app.setCurrency('$')">
+                        <div class="flex items-center gap-3">
+                            <span class="text-[18px]">🇺🇸</span>
+                            <span class="text-[15px]">Доллар США ($)</span>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="curr-check hidden" data-curr-check="$"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <div class="settings-row ripple-wrap" onclick="app.setCurrency('€')">
+                        <div class="flex items-center gap-3">
+                            <span class="text-[18px]">🇪🇺</span>
+                            <span class="text-[15px]">Евро (€)</span>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="curr-check hidden" data-curr-check="€"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                </div>
+
+                <!-- SHARED BUDGETS -->
+                <div class="text-[12px] font-semibold mb-2 px-3 uppercase tracking-widest" style="color: var(--text-secondary)">Общий бюджет на двоих</div>
+                <div class="card-level-1 overflow-hidden mb-6" id="shared-budget-card">
+                    <!-- Unconnected state -->
+                    <div id="shared-budget-unconnected">
+                        <div class="p-4" style="border-bottom: 1px solid var(--border-default)">
+                            <div class="text-[14px] leading-relaxed" style="color: var(--text-secondary)">
+                                Ведите совместный учет расходов с семьей или партнером. Все траты и графики будут синхронизированы в реальном времени.
+                            </div>
+                        </div>
+                        <div class="settings-row ripple-wrap" onclick="app.invitePartner()">
+                            <div class="flex items-center gap-3">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>
+                                <span class="text-[15px] font-medium" style="color: var(--accent-color)">Пригласить партнера</span>
+                            </div>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.3"><path d="m9 18 6-6-6-6"/></svg>
+                        </div>
+                    </div>
+
+                    <!-- Connected state -->
+                    <div id="shared-budget-connected" class="hidden">
+                        <div class="p-4 flex items-center justify-between" style="border-bottom: 1px solid var(--border-default)">
+                            <div class="flex items-center gap-3">
+                                <div style="width: 36px; height: 36px; border-radius: 50%; background: rgba(52,199,89,.15); color: #34C759;" class="flex items-center justify-center font-bold text-[18px]">🤝</div>
+                                <div>
+                                    <div class="text-[15px] font-bold" id="shared-partner-name">Партнер подключен</div>
+                                    <div class="text-[13px]" style="color: var(--text-secondary)" id="shared-partner-username">@username</div>
+                                </div>
+                            </div>
+                            <span class="text-[11px] font-bold px-2.5 py-1 rounded-full" style="background: rgba(52,199,89,.15); color: #34C759;">Активен</span>
+                        </div>
+                        <div class="settings-row ripple-wrap" onclick="app.unlinkPartner()">
+                            <div class="flex items-center gap-3">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF3B30" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="18" x2="22" y1="8" y2="12"/><line x1="22" x2="18" y1="8" y2="12"/></svg>
+                                <span class="text-[15px] font-medium" style="color: #FF3B30">Отключить общий бюджет</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- APPEARANCE -->
+                <div class="text-[12px] font-semibold mb-2 px-3 uppercase tracking-widest" style="color: var(--text-secondary)">Оформление</div>
+                <div class="card-level-1 overflow-hidden mb-6">
+                    <div class="settings-row ripple-wrap" style="border-bottom: 1px solid var(--border-default)" onclick="app.setTheme('system')">
+                        <div class="flex items-center gap-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
+                            <span class="text-[15px]">Системная</span>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="theme-check hidden" data-theme-check="system"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <div class="settings-row ripple-wrap" style="border-bottom: 1px solid var(--border-default)" onclick="app.setTheme('light')">
+                        <div class="flex items-center gap-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                            <span class="text-[15px]">Светлая</span>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="theme-check hidden" data-theme-check="light"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <div class="settings-row ripple-wrap" onclick="app.setTheme('dark')">
+                        <div class="flex items-center gap-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                            <span class="text-[15px]">Тёмная</span>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="theme-check hidden" data-theme-check="dark"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                </div>
+
+                <!-- DATA & EXPORT -->
+                <div class="text-[12px] font-semibold mb-2 px-3 uppercase tracking-widest" style="color: var(--text-secondary)">Данные</div>
+                <div class="card-level-1 overflow-hidden mb-6">
+                    <div class="settings-row ripple-wrap" style="border-bottom: 1px solid var(--border-default)" onclick="app.exportData()">
+                        <div class="flex items-center gap-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                            <span class="text-[15px]">Экспорт в CSV</span>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.3"><path d="m9 18 6-6-6-6"/></svg>
+                    </div>
+                </div>
+
+                <div class="text-center text-[12px] mt-8 pb-4" style="color: var(--text-secondary)">
+                    Expense Tracker v1.0 · Telegram Mini App
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- GLASSMORPHIC PLUS BUTTON -->
+    <div class="glassmorphic-plus-wrap" id="plus-btn-wrap">
+        <div class="glassmorphic-plus-button" onclick="app.openAddSheet()">
+            <svg class="plus-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </div>
+    </div>
+
+    <!-- LIQUID GLASS NAVIGATION -->
+    <div class="navigation-container">
+        <div class="liquid-glass-nav-wrap">
+            <div class="liquid-glass-nav-shadow"></div>
+            <div class="liquid-glass-nav" id="main-nav" role="tablist">
+                <div class="liquid-glass-nav-slider" id="nav-slider"></div>
+
+                <div class="liquid-glass-nav-item active" data-tab="0" onclick="app.switchTab(0, 'home')" role="tab" aria-selected="true" tabindex="0">
+                    <div class="liquid-glass-nav-content">
+                        <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                        <span class="nav-label">Главная</span>
+                    </div>
+                </div>
+
+                <div class="liquid-glass-nav-item" data-tab="1" onclick="app.switchTab(1, 'stats')" role="tab" aria-selected="false" tabindex="0">
+                    <div class="liquid-glass-nav-content">
+                        <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                        <span class="nav-label">Статистика</span>
+                    </div>
+                </div>
+
+                <div class="liquid-glass-nav-item" data-tab="2" onclick="app.switchTab(2, 'history')" role="tab" aria-selected="false" tabindex="0">
+                    <div class="liquid-glass-nav-content">
+                        <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        <span class="nav-label">История</span>
+                    </div>
+                </div>
+
+                <div class="liquid-glass-nav-item" data-tab="3" onclick="app.switchTab(3, 'settings')" role="tab" aria-selected="false" tabindex="0">
+                    <div class="liquid-glass-nav-content">
+                        <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <span class="nav-label">Настройки</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADD TRANSACTION BOTTOM SHEET -->
+    <div class="bottom-sheet-overlay" id="sheet-overlay" onclick="app.closeAddSheet()"></div>
+    <div class="bottom-sheet" id="add-sheet">
+        <div class="sheet-handle"></div>
+
+        <div class="p-5 flex-1 overflow-y-auto no-scrollbar">
+            <div class="text-center mb-6">
+                <div class="text-[13px] font-medium" style="color: var(--text-secondary)">Сумма</div>
+                <div class="text-[48px] font-bold leading-none mt-2 tnum" id="sheet-amount">0</div>
+                <div class="text-[15px] mt-1" style="color: var(--text-secondary)" id="sheet-currency">₽</div>
+            </div>
+
+            <div class="mb-4">
+                <input type="text" id="sheet-note" placeholder="Заметка (необязательно)"
+                    class="w-full rounded-xl py-3 px-4 outline-none text-[15px]"
+                    style="background: var(--background-level-1); color: var(--text-default);">
+            </div>
+
+            <div class="text-[12px] font-semibold mb-2 px-1 uppercase tracking-wider" style="color: var(--text-secondary)">Категория</div>
+            <div class="flex overflow-x-auto gap-2 pb-3 no-scrollbar" id="sheet-categories">
+                <!-- Categories injected here -->
+            </div>
+        </div>
+
+        <div class="numeric-keyboard" id="keyboard">
+            <div class="keyboard-key" onclick="app.keyPress('1')">1</div>
+            <div class="keyboard-key" onclick="app.keyPress('2')">2</div>
+            <div class="keyboard-key" onclick="app.keyPress('3')">3</div>
+            <div class="keyboard-key" onclick="app.keyPress('4')">4</div>
+            <div class="keyboard-key" onclick="app.keyPress('5')">5</div>
+            <div class="keyboard-key" onclick="app.keyPress('6')">6</div>
+            <div class="keyboard-key" onclick="app.keyPress('7')">7</div>
+            <div class="keyboard-key" onclick="app.keyPress('8')">8</div>
+            <div class="keyboard-key" onclick="app.keyPress('9')">9</div>
+            <div class="keyboard-key" onclick="app.keyPress('.')"><span style="font-size:30px;line-height:1">.</span></div>
+            <div class="keyboard-key" onclick="app.keyPress('0')">0</div>
+            <div class="keyboard-key keyboard-key--backspace" onclick="app.keyPress('del')">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+            </div>
+            <div class="keyboard-key keyboard-key--save" onclick="app.saveTransaction()">Сохранить</div>
+        </div>
+    </div>
+
+        <script src="app.js?v=8"></script>
+</body>
+</html>

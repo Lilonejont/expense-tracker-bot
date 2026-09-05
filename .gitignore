@@ -1,0 +1,26 @@
+node_modules/
+dist/
+.env
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.DS_Store
+Thumbs.db
+
+# Secrets and server deployment tools
+tracker_php/config.php
+config.php
+ssh_exec.py
+deploy_to_server.py
+test_local.php
+test_bot_live.py
+whyspent*
+extract_*.py
+inspect_*.py
+scrape_*.py
+get_whyspent_url.py
+*.png
