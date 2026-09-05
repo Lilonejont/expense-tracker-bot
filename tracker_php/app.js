@@ -315,6 +315,125 @@ const app = {
                 this.updateCurrencyCheck();
             } catch(e) { console.error(e); }
         }
+
+        // Load limits
+        this.loadLimits();
+    },
+
+    /* ── LIMITS MANAGEMENT ──────────────────────────────────────── */
+    async loadLimits() {
+        const res = await this.request('get-limits', {}, 'GET');
+        const listEl = document.getElementById('limits-list');
+        const emptyEl = document.getElementById('limits-empty');
+        if (!listEl) return;
+
+        if (res && res.ok && res.limits && res.limits.length > 0) {
+            listEl.innerHTML = '';
+            res.limits.forEach(lim => {
+                const row = document.createElement('div');
+                row.className = 'settings-row ripple-wrap';
+                row.style.borderBottom = '1px solid var(--border-default)';
+                row.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <span class="text-[18px]">${lim.emoji || '📁'}</span>
+                        <div>
+                            <div class="text-[15px] font-medium">${lim.name}</div>
+                            <div class="text-[13px]" style="color: var(--text-secondary)">${Number(lim.limit_amount).toLocaleString('ru-RU')} ${this.state.currency || '₽'}/мес</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span onclick="event.stopPropagation(); app.deleteLimit(${lim.category_id}, '${lim.name}')" 
+                              style="color: #FF3B30; padding: 6px; cursor: pointer; border-radius: 8px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                        </span>
+                    </div>
+                `;
+                listEl.appendChild(row);
+            });
+        } else {
+            listEl.innerHTML = '<div class="p-4 text-center text-[14px]" style="color: var(--text-secondary)">Лимиты не установлены</div>';
+        }
+    },
+
+    async showAddLimitDialog() {
+        this.haptic('impact', 'medium');
+        // Load categories
+        const catRes = await this.request('category-list', {}, 'GET');
+        if (!catRes || !catRes.categories) {
+            this.showAlert('Не удалось загрузить категории');
+            return;
+        }
+
+        // Build options list
+        const cats = catRes.categories;
+        const catOptions = cats.map(c => `${c.emoji} ${c.name}`);
+
+        if (this.tg && this.tg.showPopup) {
+            // Use simple prompt approach: first select category via popup, then ask amount
+            const buttons = cats.slice(0, 8).map((c, i) => ({
+                id: String(c.id),
+                type: 'default',
+                text: `${c.emoji} ${c.name}`
+            }));
+            buttons.push({ id: 'cancel', type: 'destructive', text: 'Отмена' });
+
+            this.tg.showPopup({
+                title: 'Выберите категорию',
+                message: 'Для какой категории установить лимит?',
+                buttons: buttons.slice(0, 3) // TG popup supports max 3 buttons
+            }, (btnId) => {
+                if (btnId === 'cancel' || !btnId) return;
+                const catId = parseInt(btnId);
+                const cat = cats.find(c => c.id === catId);
+                if (!cat) return;
+
+                // Ask for amount
+                const amount = prompt(`Введите лимит в месяц для "${cat.emoji} ${cat.name}" (или 0 для удаления):`);
+                if (amount === null) return;
+                const numAmount = parseFloat(amount.replace(',', '.'));
+                if (isNaN(numAmount) || numAmount < 0) {
+                    this.showAlert('Некорректная сумма');
+                    return;
+                }
+                this.saveLimit(catId, numAmount);
+            });
+        } else {
+            // Fallback: use prompt
+            const catListStr = cats.map(c => `${c.id}: ${c.emoji} ${c.name}`).join('\n');
+            const catIdStr = prompt(`Введите номер категории:\n\n${catListStr}`);
+            if (!catIdStr) return;
+            const catId = parseInt(catIdStr);
+            const cat = cats.find(c => c.id === catId);
+            if (!cat) { this.showAlert('Категория не найдена'); return; }
+
+            const amount = prompt(`Лимит для "${cat.emoji} ${cat.name}" в месяц:`);
+            if (!amount) return;
+            const numAmount = parseFloat(amount.replace(',', '.'));
+            if (isNaN(numAmount) || numAmount < 0) { this.showAlert('Некорректная сумма'); return; }
+            this.saveLimit(catId, numAmount);
+        }
+    },
+
+    async saveLimit(categoryId, amount) {
+        const res = await this.request('set-limit', { category_id: categoryId, amount: amount }, 'POST');
+        if (res && res.ok) {
+            this.haptic('notification', 'success');
+            this.loadLimits();
+        } else {
+            this.showAlert('Ошибка при сохранении лимита');
+        }
+    },
+
+    async deleteLimit(categoryId, catName) {
+        this.haptic('impact', 'medium');
+        const confirmed = confirm(`Удалить лимит для "${catName}"?`);
+        if (!confirmed) return;
+
+        const res = await this.request('set-limit', { category_id: categoryId, amount: 0 }, 'POST');
+        if (res && res.ok) {
+            this.haptic('notification', 'success');
+            this.loadLimits();
+        }
     },
 
     async unlinkPartner() {

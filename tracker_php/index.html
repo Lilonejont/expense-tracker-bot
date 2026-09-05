@@ -1152,6 +1152,27 @@
                     </div>
                 </div>
 
+                <!-- CATEGORY LIMITS -->
+                <div class="text-[12px] font-semibold mb-2 px-3 uppercase tracking-widest" style="color: var(--text-secondary)">Лимиты по категориям</div>
+                <div class="card-level-1 overflow-hidden mb-6" id="limits-card">
+                    <div class="p-4" style="border-bottom: 1px solid var(--border-default)">
+                        <div class="text-[14px] leading-relaxed" style="color: var(--text-secondary)">
+                            Установите лимиты расходов по категориям. При превышении бот предупредит вас.
+                        </div>
+                    </div>
+                    <div id="limits-list">
+                        <!-- Limits will be rendered here by JS -->
+                        <div class="p-4 text-center text-[14px]" style="color: var(--text-secondary)" id="limits-empty">Загрузка...</div>
+                    </div>
+                    <div class="settings-row ripple-wrap" onclick="app.showAddLimitDialog()" style="border-top: 1px solid var(--border-default)">
+                        <div class="flex items-center gap-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+                            <span class="text-[15px] font-medium" style="color: var(--accent-color)">Добавить лимит</span>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.3"><path d="m9 18 6-6-6-6"/></svg>
+                    </div>
+                </div>
+
                 <!-- APPEARANCE -->
                 <div class="text-[12px] font-semibold mb-2 px-3 uppercase tracking-widest" style="color: var(--text-secondary)">Оформление</div>
                 <div class="card-level-1 overflow-hidden mb-6">
