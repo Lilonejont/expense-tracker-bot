@@ -366,52 +366,55 @@ const app = {
 
         // Build options list
         const cats = catRes.categories;
-        const catOptions = cats.map(c => `${c.emoji} ${c.name}`);
-
-        if (this.tg && this.tg.showPopup) {
-            // Use simple prompt approach: first select category via popup, then ask amount
-            const buttons = cats.slice(0, 8).map((c, i) => ({
-                id: String(c.id),
-                type: 'default',
-                text: `${c.emoji} ${c.name}`
-            }));
-            buttons.push({ id: 'cancel', type: 'destructive', text: 'Отмена' });
-
-            this.tg.showPopup({
-                title: 'Выберите категорию',
-                message: 'Для какой категории установить лимит?',
-                buttons: buttons.slice(0, 3) // TG popup supports max 3 buttons
-            }, (btnId) => {
-                if (btnId === 'cancel' || !btnId) return;
-                const catId = parseInt(btnId);
-                const cat = cats.find(c => c.id === catId);
-                if (!cat) return;
-
-                // Ask for amount
-                const amount = prompt(`Введите лимит в месяц для "${cat.emoji} ${cat.name}" (или 0 для удаления):`);
-                if (amount === null) return;
-                const numAmount = parseFloat(amount.replace(',', '.'));
-                if (isNaN(numAmount) || numAmount < 0) {
-                    this.showAlert('Некорректная сумма');
-                    return;
-                }
-                this.saveLimit(catId, numAmount);
-            });
-        } else {
-            // Fallback: use prompt
-            const catListStr = cats.map(c => `${c.id}: ${c.emoji} ${c.name}`).join('\n');
-            const catIdStr = prompt(`Введите номер категории:\n\n${catListStr}`);
-            if (!catIdStr) return;
-            const catId = parseInt(catIdStr);
-            const cat = cats.find(c => c.id === catId);
-            if (!cat) { this.showAlert('Категория не найдена'); return; }
-
-            const amount = prompt(`Лимит для "${cat.emoji} ${cat.name}" в месяц:`);
-            if (!amount) return;
-            const numAmount = parseFloat(amount.replace(',', '.'));
-            if (isNaN(numAmount) || numAmount < 0) { this.showAlert('Некорректная сумма'); return; }
-            this.saveLimit(catId, numAmount);
-        }
+        
+        // Create an overlay
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;transition:opacity 0.2s;';
+        
+        const catOptions = cats.map(c => `<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('');
+        
+        overlay.innerHTML = `
+            <div style="background:var(--surface-glass);width:100%;max-width:320px;border-radius:20px;padding:20px;box-shadow:0 15px 40px rgba(0,0,0,0.3);color:var(--text-primary);animation: zoomIn 0.2s cubic-bezier(0.32,0.72,0,1);">
+                <style>@keyframes zoomIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }</style>
+                <h3 style="margin-top:0;margin-bottom:15px;font-size:18px;font-weight:bold;text-align:center;">Установить лимит</h3>
+                <div style="margin-bottom:15px;">
+                    <label style="display:block;margin-bottom:8px;font-size:13px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:1px;">Категория</label>
+                    <select id="limit-cat-select" style="width:100%;padding:12px;border-radius:12px;background:var(--liquid-background-color);color:var(--text-primary);border:1px solid var(--border-default);font-size:16px;outline:none;appearance:none;">
+                        ${catOptions}
+                    </select>
+                </div>
+                <div style="margin-bottom:24px;">
+                    <label style="display:block;margin-bottom:8px;font-size:13px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);letter-spacing:1px;">Сумма в месяц</label>
+                    <input type="number" id="limit-amount-input" placeholder="0" style="width:100%;padding:12px;border-radius:12px;background:var(--liquid-background-color);color:var(--text-primary);border:1px solid var(--border-default);font-size:20px;font-weight:bold;box-sizing:border-box;outline:none;">
+                </div>
+                <div style="display:flex;gap:12px;">
+                    <button id="limit-cancel-btn" style="flex:1;padding:14px;border-radius:12px;background:var(--border-level-1);color:var(--text-primary);border:none;font-size:16px;font-weight:bold;cursor:pointer;">Отмена</button>
+                    <button id="limit-save-btn" style="flex:1;padding:14px;border-radius:12px;background:var(--accent-color);color:#fff;border:none;font-size:16px;font-weight:bold;cursor:pointer;">Сохранить</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        
+        const saveBtn = overlay.querySelector('#limit-save-btn');
+        const cancelBtn = overlay.querySelector('#limit-cancel-btn');
+        const amtInput = overlay.querySelector('#limit-amount-input');
+        const catSelect = overlay.querySelector('#limit-cat-select');
+        
+        setTimeout(() => amtInput.focus(), 100);
+        
+        const close = () => { document.body.removeChild(overlay); };
+        
+        cancelBtn.onclick = close;
+        saveBtn.onclick = () => {
+            const amt = parseFloat(amtInput.value.replace(',', '.'));
+            const catId = parseInt(catSelect.value);
+            if (isNaN(amt) || amt <= 0) {
+                this.showAlert('Введите корректную сумму лимита');
+                return;
+            }
+            this.saveLimit(catId, amt);
+            close();
+        };
     },
 
     async saveLimit(categoryId, amount) {
@@ -426,13 +429,28 @@ const app = {
 
     async deleteLimit(categoryId, catName) {
         this.haptic('impact', 'medium');
-        const confirmed = confirm(`Удалить лимит для "${catName}"?`);
-        if (!confirmed) return;
+        
+        const doDelete = async () => {
+            const res = await this.request('set-limit', { category_id: categoryId, amount: 0 }, 'POST');
+            if (res && res.ok) {
+                this.haptic('notification', 'success');
+                this.loadLimits();
+            }
+        };
 
-        const res = await this.request('set-limit', { category_id: categoryId, amount: 0 }, 'POST');
-        if (res && res.ok) {
-            this.haptic('notification', 'success');
-            this.loadLimits();
+        if (this.tg && this.tg.showPopup) {
+            this.tg.showPopup({
+                title: 'Удалить лимит?',
+                message: `Вы уверены, что хотите удалить лимит для категории "${catName}"?`,
+                buttons: [
+                    { id: 'delete', type: 'destructive', text: 'Удалить' },
+                    { id: 'cancel', type: 'default', text: 'Отмена' }
+                ]
+            }, (btnId) => {
+                if (btnId === 'delete') doDelete();
+            });
+        } else {
+            if (confirm(`Удалить лимит для "${catName}"?`)) doDelete();
         }
     },
 
