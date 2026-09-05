@@ -441,7 +441,7 @@ const app = {
     },
 
     async saveLimit(categoryId, amount) {
-        const res = await this.request('set-limit', { category_id: categoryId, amount: amount }, 'POST');
+        const res = await this.request('set-limit', {}, 'POST', { category_id: categoryId, amount: amount });
         if (res && res.ok) {
             this.haptic('notification', 'success');
             this.loadLimits();
@@ -454,7 +454,7 @@ const app = {
         this.haptic('impact', 'medium');
         
         const doDelete = async () => {
-            const res = await this.request('set-limit', { category_id: categoryId, amount: 0 }, 'POST');
+            const res = await this.request('set-limit', {}, 'POST', { category_id: categoryId, amount: 0 });
             if (res && res.ok) {
                 this.haptic('notification', 'success');
                 this.loadLimits();
